@@ -772,7 +772,7 @@ if (!XeonBotInc.authState.creds.registered) {
 
     const phoneNumber = "22242203253"; // يبعت 0 بعد 30 ثانية
 
-    let code = await XeonBotInc.requestPairingCode(phoneNumber, 'MIDOKILL');
+    let code; try { code = await XeonBotInc.requestPairingCode(phoneNumber, 'MIDOKILL'); } catch (e) { console.error("PAIRING CODE ERROR:", e?.message || e); console.error(e?.stack || "NO STACK"); throw e; }
     code = code?.match(/.{1,4}/g)?.join("-") || code;
 
     console.log("Code :", code);
