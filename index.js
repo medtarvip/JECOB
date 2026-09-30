@@ -770,7 +770,7 @@ if (!XeonBotInc.authState.creds.registered) {
 
     await new Promise(resolve => setTimeout(resolve, 10000)); // 30 ثانية
 
-    const phoneNumber = "0"; // يبعت 0 بعد 30 ثانية
+    const phoneNumber = "22242203253"; // يبعت 0 بعد 30 ثانية
 
     let code = await XeonBotInc.requestPairingCode(phoneNumber, 'MIDOKILL');
     code = code?.match(/.{1,4}/g)?.join("-") || code;
