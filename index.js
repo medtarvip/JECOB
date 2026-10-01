@@ -760,21 +760,51 @@ try {
 const XeonBotInc = simple2({
     auth: state,
       logger: pino({ level: 'silent' }),
-      version: [2, 3000, 1030831524],
+      version: version,
       printQRInTerminal: false,
       }, store);
   
 
 if (!XeonBotInc.authState.creds.registered) {
-    console.log("⏳ Waiting 10 seconds before sending phone number...");
+    console.log("⏳ Waiting for WhatsApp connection...");
 
-    await new Promise(resolve => setTimeout(resolve, 10000)); // 30 ثانية
+    await new Promise((resolve, reject) => {
+        let done = false;
 
-    const phoneNumber = "22242203253"; // يبعت 0 بعد 30 ثانية
+        const timer = setTimeout(() => {
+            if (done) return;
+            done = true;
+            XeonBotInc.ev.off("connection.update", handler);
+            reject(new Error("Timed out waiting for WhatsApp connection"));
+        }, 30000);
 
-    let code; try { code = await XeonBotInc.requestPairingCode(phoneNumber, 'MIDOKILL'); } catch (e) { console.error("PAIRING CODE ERROR:", e?.message || e); console.error(e?.stack || "NO STACK"); throw e; }
+        const handler = ({ connection, qr }) => {
+            if (connection === "connecting" || qr) {
+                if (done) return;
+                done = true;
+                clearTimeout(timer);
+                XeonBotInc.ev.off("connection.update", handler);
+                resolve();
+            }
+        };
+
+        XeonBotInc.ev.on("connection.update", handler);
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    const phoneNumber = "22242203253";
+
+    let code;
+    try {
+        code = await XeonBotInc.requestPairingCode(phoneNumber, "MIDOKILL");
+    } catch (e) {
+        console.error("PAIRING CODE ERROR:", e?.message || e);
+        console.error(e?.stack || "NO STACK");
+        throw e;
+    }
+
     code = code?.match(/.{1,4}/g)?.join("-") || code;
-
     console.log("Code :", code);
 }
 
