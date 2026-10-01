@@ -17,9 +17,9 @@
   "author": "DGXeon",
   "license": "MIT",
   "dependencies": {
-    "@whiskeysockets/baileys": "npm:@alannxd/baileys",
     "@adiwajshing/keyed-db": "^0.2.4",
     "@hapi/boom": "^10.0.1",
+    "@whiskeysockets/baileys": "npm:@alannxd/baileys@3.0.3",
     "awesome-phonenumber": "^2.64.0",
     "axios": "^1.6.8",
     "body-parser": "1.19.0",
