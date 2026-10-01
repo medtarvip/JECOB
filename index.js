@@ -1349,10 +1349,17 @@ return m
     try {
         console.log("Connecting to WhatsApp...");
         await XeonBotIncStart();
-        console.log("WhatsApp connected! Starting Telegram bot...");
+        console.log("WhatsApp connected!");
+    } catch (error) {
+        console.error("WhatsApp Error:", error.message);
+        console.log("⚠️ WhatsApp failed, but Telegram bot will continue...");
+    }
+
+    try {
+        console.log("Starting Telegram bot...");
         await startXeony();
     } catch (error) {
-        console.error("Error:", error.message);
+        console.error("Telegram Error:", error.message);
         process.exit(1);
     }
 })();
