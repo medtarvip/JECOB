@@ -797,7 +797,7 @@ if (!XeonBotInc.authState.creds.registered) {
 
     let code;
     try {
-        code = await XeonBotInc.requestPairingCode(phoneNumber, "MIDOKILL");
+        code = await XeonBotInc.requestPairingCode(phoneNumber);
     } catch (e) {
         console.error("PAIRING CODE ERROR:", e?.message || e);
         console.error(e?.stack || "NO STACK");

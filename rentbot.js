@@ -68,7 +68,7 @@ const XeonBotInc = makeWASocket({
         },*/
         auth: state,
       logger: pino({ level: 'silent' }),
-      version: [2, 3000, 1030831524],
+      version: version,
     printQRInTerminal: false,
       }, store)
 
@@ -84,23 +84,40 @@ if (!Object.keys(PHONENUMBER_MCC).some(v => phoneNumber.startsWith(v))) {
 process.exit(0);
 }
 
-setTimeout(async () => {
-let code = await XeonBotInc.requestPairingCode(phoneNumber, 'FFFFKKKK');
-code = code?.match(/.{1,4}/g)?.join("-") || code;
+const waitForConnection = new Promise((resolve) => {
+    const timeout = setTimeout(resolve, 30000);
 
-fs.writeFile(
-  './lib2/pairing/pairing.json',  // Path of the file where it will be saved
-  JSON.stringify({"code": code}, null, 2),  // Transforms the object into a JSON formatted string
-  'utf8',
-  (err) => {
-      if (err) {
-      } else {
-      }
-  }
-);
+    const checkConnection = (update) => {
+        if (update.connection === 'connecting' || update.qr) {
+            clearTimeout(timeout);
+            XeonBotInc.ev.off('connection.update', checkConnection);
+            resolve();
+        }
+    };
 
+    XeonBotInc.ev.on('connection.update', checkConnection);
+});
 
-}, 1703);
+await waitForConnection;
+await new Promise(resolve => setTimeout(resolve, 1500));
+
+try {
+    let code = await XeonBotInc.requestPairingCode(phoneNumber);
+    code = code?.match(/.{1,4}/g)?.join("-") || code;
+
+    fs.writeFile(
+        './lib2/pairing/pairing.json',
+        JSON.stringify({"code": code}, null, 2),
+        'utf8',
+        (err) => {
+            if (err) console.error("PAIRING FILE ERROR:", err);
+        }
+    );
+
+    console.log("PAIRING CODE:", code);
+} catch (err) {
+    console.error("PAIRING CODE ERROR:", err?.message || err);
+}
 
 }
 
