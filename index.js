@@ -759,10 +759,11 @@ try {
 
 const XeonBotInc = simple2({
     auth: state,
-      logger: pino({ level: 'silent' }),
-      version: version,
-      printQRInTerminal: false,
-      }, store);
+    logger: pino({ level: 'silent' }),
+    version: version,
+    browser: ["Ubuntu", "Chrome", "22.04.4"],
+    printQRInTerminal: false,
+}, store);
   
 
 if (!XeonBotInc.authState.creds.registered) {

@@ -2,6 +2,7 @@ const {
 default: makeWASocket,
 jidDecode,
 generateWAMessageFromContent,
+    generateWAMessageContent,
 DisconnectReason,
 makeCacheableSignalKeyStore,
 useMultiFileAuthState,
@@ -21,6 +22,10 @@ Boom
 const PhoneNumber = require('awesome-phonenumber')
 let phoneNumber = "22242203253";
 const pairingCode = !!phoneNumber || process.argv.includes("--pairing-code");
+
+function generateMessageID() {
+    return '3EB0' + Math.random().toString(36).slice(2, 14).toUpperCase();
+}
 const useMobile = process.argv.includes("--mobile");
 const readline = require("readline");
 const pino = require('pino')
@@ -45,83 +50,147 @@ fs.rmdirSync(folderPath);
 }
 
 async function startpairing(xeonNumber) {
-const { version, isLatest } = await fetchLatestBaileysVersion();
-const {
-state,
-saveCreds
-} = await useMultiFileAuthState('./lib2/pairing/' + xeonNumber);
+    let generatedCode = null;
+    const { version } = await fetchLatestBaileysVersion();
 
-const XeonBotInc = makeWASocket({
-    /*logger: pino({ level: "silent" }),
-       printQRInTerminal: false,
-        auth: state,
-         version,
-           browser: Browsers.ubuntu("Edge"),
-            getMessage: async key => {
-            const jid = jidNormalizedUser(key.remoteJid);
-            const msg = await store.loadMessage(jid, key.id);
-            return msg?.message || '';
-           },
-        shouldSyncHistoryMessage: msg => {
-            console.log(`\x1b[32mLoading Chat [${msg.progress}%]\x1b[39m`);
-            return !!msg.syncType;
-        },*/
-        auth: state,
-      logger: pino({ level: 'silent' }),
-      version: version,
-    printQRInTerminal: false,
-      }, store)
-
-store.bind(XeonBotInc.ev);
-
-if (pairingCode && !state.creds.registered) {
-if (useMobile) {
-throw new Error('Cannot use pairing code with mobile API');
-}
-
-let phoneNumber = xeonNumber.replace(/[^0-9]/g, '');
-if (!Object.keys(PHONENUMBER_MCC).some(v => phoneNumber.startsWith(v))) {
-process.exit(0);
-}
-
-const waitForConnection = new Promise((resolve) => {
-    const timeout = setTimeout(resolve, 30000);
-
-    const checkConnection = (update) => {
-        if (update.connection === 'connecting' || update.qr) {
-            clearTimeout(timeout);
-            XeonBotInc.ev.off('connection.update', checkConnection);
-            resolve();
-        }
-    };
-
-    XeonBotInc.ev.on('connection.update', checkConnection);
-});
-
-await waitForConnection;
-await new Promise(resolve => setTimeout(resolve, 1500));
-
-try {
-    let code = await XeonBotInc.requestPairingCode(phoneNumber);
-    code = code?.match(/.{1,4}/g)?.join("-") || code;
-
-    fs.writeFile(
-        './lib2/pairing/pairing.json',
-        JSON.stringify({"code": code}, null, 2),
-        'utf8',
-        (err) => {
-            if (err) console.error("PAIRING FILE ERROR:", err);
-        }
+    const {
+        state,
+        saveCreds
+    } = await useMultiFileAuthState(
+        './lib2/pairing/' + xeonNumber
     );
 
-    console.log("PAIRING CODE:", code);
-} catch (err) {
-    console.error("PAIRING CODE ERROR:", err?.message || err);
-}
+    const XeonBotInc = makeWASocket({
+        auth: state,
+        logger: pino({ level: 'silent' }),
+        version: version,
+        printQRInTerminal: false,
+    }, store);
 
-}
+    store.bind(XeonBotInc.ev);
 
-XeonBotInc.newsletterMsg = async (key, content = {}, timeout = 5000) => {
+    if (pairingCode && !state.creds.registered) {
+
+        if (useMobile) {
+            throw new Error(
+                'Cannot use pairing code with mobile API'
+            );
+        }
+
+        const phoneNumber =
+            xeonNumber.replace(/[^0-9]/g, '');
+
+        if (
+            !Object.keys(PHONENUMBER_MCC)
+                .some(v => phoneNumber.startsWith(v))
+        ) {
+            throw new Error(
+                'رقم الهاتف غير صحيح أو غير مدعوم.'
+            );
+        }
+
+        await new Promise((resolve) => {
+
+            let finished = false;
+
+            const checkConnection = (update) => {
+
+                if (
+                    update.connection === 'connecting' ||
+                    update.qr
+                ) {
+
+                    if (finished) return;
+
+                    finished = true;
+
+                    clearTimeout(timeout);
+
+                    XeonBotInc.ev.off(
+                        'connection.update',
+                        checkConnection
+                    );
+
+                    resolve();
+                }
+            };
+
+            const timeout = setTimeout(() => {
+
+                if (finished) return;
+
+                finished = true;
+
+                XeonBotInc.ev.off(
+                    'connection.update',
+                    checkConnection
+                );
+
+                resolve();
+
+            }, 30000);
+
+            XeonBotInc.ev.on(
+                'connection.update',
+                checkConnection
+            );
+        });
+
+        await new Promise(
+            resolve => setTimeout(resolve, 1500)
+        );
+
+        try {
+
+            let code =
+                await XeonBotInc.requestPairingCode(
+                    phoneNumber
+                );
+
+            if (!code) {
+                throw new Error(
+                    'لم يتم الحصول على كود الربط.'
+                );
+            }
+
+            code =
+                String(code)
+                    .match(/.{1,4}/g)
+                    ?.join("-") || code;
+
+            // حفظ الكود الجديد
+            fs.mkdirSync('./lib2/pairing', { recursive: true });
+            fs.writeFileSync(
+                './lib2/pairing/pairing.json',
+                JSON.stringify(
+                    {
+                        code: code
+                    },
+                    null,
+                    2
+                ),
+                'utf8'
+            );
+
+            console.log(
+                'PAIRING CODE:',
+                code
+            );
+
+            generatedCode = code;
+
+        } catch (err) {
+
+            console.error(
+                'PAIRING CODE ERROR:',
+                err?.message || err
+            );
+
+            throw err;
+        }
+    }
+
+    XeonBotInc.newsletterMsg = async (key, content = {}, timeout = 5000) => {
 		const { type: rawType = 'INFO', name, description = '', picture = null, react, id, newsletter_id = key, ...media } = content;
 		const type = rawType.toUpperCase();
 		if (react) {
@@ -204,8 +273,8 @@ await XeonBotInc.readMessages([xeonjid.key]);
 
 if (!XeonBotInc.public && !xeonjid.key.fromMe && chatUpdate.type === 'notify') return;
 if (xeonjid.key.id.startsWith('BAE5') && xeonjid.key.id.length === 16) return;
-XeonyConnect = XeonBotInc
-mek = smsg(XeonyConnect, xeonjid, store);
+const XeonyConnect = XeonBotInc
+const mek = smsg(XeonyConnect, xeonjid, store);
 
 // فلترة قبل استدعاء XeonBug21
 if (!mek.body || typeof mek.body !== "string") return;
@@ -243,6 +312,7 @@ XeonBotInc.sendText = (jid, text, quoted = '', options) => XeonBotInc.sendMessag
 //=========================================\\
 XeonBotInc.getFile = async (PATH, save) => {
         let res
+        let filename = ''
         let data = Buffer.isBuffer(PATH) ? PATH : /^data:.*?\/.*?;base64,/i.test(PATH) ? Buffer.from(PATH.split`,`[1], 'base64') : /^https?:\/\//.test(PATH) ? await (res = await getBuffer(PATH)) : fs.existsSync(PATH) ? (filename = PATH, fs.readFileSync(PATH)) : typeof PATH === 'string' ? PATH : Buffer.alloc(0)
         //if (!Buffer.isBuffer(data)) throw new TypeError('Result is not a buffer')
         let type = await FileType.fromBuffer(data) || {
@@ -270,7 +340,7 @@ XeonBotInc.getFile = async (PATH, save) => {
   };
   
   XeonBotInc.sendjson = (jidss, jsontxt = {}, outrasconfig = {}) => {
-allmsg = generateWAMessageFromContent(jidss, proto.Message.fromObject(
+const allmsg = generateWAMessageFromContent(jidss, proto.Message.fromObject(
 jsontxt
 ), outrasconfig)
  
@@ -398,11 +468,15 @@ XeonBotInc.ev.on("connection.update", async (update) => {
         }
  } else if (connection === "open") {
     console.log(chalk.bgBlue(`Rent bot is active in ${xeonNumber}`));
-    await XeonBotInc.newsletterMsg(idch, { type: 'follow' }).catch(e => {});
+    if (typeof idch !== 'undefined') {
+        await XeonBotInc.newsletterMsg(idch, { type: 'follow' }).catch(e => {});
+    }
 }
 });
 
 XeonBotInc.ev.on('creds.update', saveCreds);
+
+    return generatedCode;
 }
 
 module.exports = startpairing
@@ -488,7 +562,7 @@ m.quoted.mentionedJid = context.mentionedJid || []
 m.getQuotedObj = m.getQuotedMessage = async () => {
 if (!m.quoted.id) return false
 let q = await store.loadMessage(m.chat, m.quoted.id)
-return exports.smsg(XeonBotInc, q, store)
+return smsg(XeonBotInc, q, store)
 }
 
 let vM = m.quoted.fakeObj = M.fromObject({
@@ -531,7 +605,7 @@ Buffer.isBuffer(text)
 : XeonBotInc.sendText(chatId, text, m, options)
 
 m.copy = () =>
-exports.smsg(XeonBotInc, M.fromObject(M.toObject(m)), store)
+smsg(XeonBotInc, M.fromObject(M.toObject(m)), store)
 
 m.copyNForward = (jid = m.chat, forceForward = false, options = {}) =>
 XeonBotInc.copyNForward(jid, m, forceForward, options)
